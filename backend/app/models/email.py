@@ -1,7 +1,7 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, ForeignKey, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, ForeignKey, func, Enum
 from sqlalchemy.orm import relationship
-from db.database import Base
-from app.enums import Priority_Level
+from database.database import Base
+from models.enums import Priority_Level
 
 
 class Email(Base):
