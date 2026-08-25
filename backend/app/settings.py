@@ -1,5 +1,5 @@
 import os
-from typing import optional
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 DOTENV=os.path.join(os.path.dirname(__file__), ".env")

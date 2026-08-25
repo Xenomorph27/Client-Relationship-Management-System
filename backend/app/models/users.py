@@ -1,7 +1,7 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func, Enum
 from sqlalchemy.orm import relationship
-from db.database import Base
-from app.enums import Priority_Level
+from database.database import Base
+from models.enums import Priority_Level
 
 
 class User(Base):

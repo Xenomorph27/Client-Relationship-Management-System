@@ -1,10 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, Integer, String, DateTime, func, Enum
 from sqlalchemy.orm import relationship
-from app.database import Base
-from app.enums import Priority_Level
+from database.database import Base
+from models.enums import Priority_Level
 
-class Organization(Base):
-    __tablename__ = "organizations"
+class Organisation(Base):
+    __tablename__ = "organisations"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(120), index=True, nullable=False)
     website = Column(String, nullable=True)
@@ -16,4 +16,4 @@ class Organization(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now())
 
-    leads = relationship("Lead", back_populates="organization")
+    leads = relationship("Lead", back_populates="organisation")
