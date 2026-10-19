@@ -14,3 +14,6 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now())   
     priority_lvl=Column(Enum(Priority_Level, name="Priority_lvl"), default=Priority_Level.low_priority, nullable=False)
+
+    orders = relationship("Order", back_populates="owner")
+    tasks = relationship("Task", back_populates="assignee")

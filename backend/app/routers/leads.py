@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from crud import crud_lead
 from database.database import get_db
-from schemas.lead import Lead, LeadCreate
+from schemas.lead import Lead, LeadCreate, LeadUpdate
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -12,7 +12,7 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db)):
     return crud_lead.create_lead(db, **payload.model_dump())
 
 @router.get("/", response_model=List[Lead])
-def list_leads(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+def list_leads(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud_lead.get_all_leads(db, skip=skip, limit=limit)
 
 @router.get("/{lead_id}", response_model=Lead)
@@ -21,3 +21,16 @@ def read_lead(lead_id: int, db: Session = Depends(get_db)):
     if db_lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
     return db_lead
+
+@router.patch("/{lead_id}", response_model=Lead)
+def patch_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)):
+    updated = crud_lead.update_lead(db, lead_id, payload)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return updated
+
+@router.delete("/{lead_id}", status_code=204)
+def remove_lead(lead_id: int, db: Session = Depends(get_db)):
+    if not crud_lead.delete_lead(db, lead_id):
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return None

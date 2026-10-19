@@ -36,7 +36,10 @@ config.set_main_option("sqlalchemy.url", settings.database_url)
 # target_metadata = mymodel.Base.metadata
 from models.campaign import Campaign
 from models.customer import Customer
-from models.deals import Deal
+from models.orders import Order
+from models.inventory import InventoryItem
+from models.carts import Cart
+from models.tasks import Task
 from models.email import Email
 from models.lead import Lead
 from models.users import User
