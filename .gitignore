@@ -14,8 +14,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Anchored to the repo root. Unanchored, "lib/" also matched frontend/src/lib/,
+# which silently kept real source out of git - and out of Tailwind's content
+# scan, so every class defined only in there was never generated.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -216,3 +219,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Visual Studio / VS Code local state. Per-machine window layout and a
+# SQLite index - never useful to another checkout, and it churns every session.
+.vs/
+.vscode/

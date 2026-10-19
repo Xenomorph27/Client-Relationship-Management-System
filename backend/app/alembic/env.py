@@ -16,6 +16,20 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# The connection URL comes from the environment, never from alembic.ini. The
+# ini file is committed, so a URL written there is a published password - which
+# is exactly what happened once already. settings reads backend/app/.env, which
+# is git-ignored, and the same value is what the app itself connects with, so
+# migrations can never run against a different database than the API.
+from settings import settings
+
+if not settings.database_url:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Copy backend/app/.env.example to "
+        "backend/app/.env and fill it in before running Alembic."
+    )
+config.set_main_option("sqlalchemy.url", settings.database_url)
+
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
