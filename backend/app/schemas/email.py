@@ -15,6 +15,16 @@ class EmailBase(BaseModel):
 class EmailCreate(EmailBase):
     pass
 
+
+class EmailUpdate(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    recipient: Optional[str] = None
+    is_opened: Optional[bool] = None
+    lead_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    priority_lvl: Optional[Priority_Level] = None
+
 class Email(EmailBase):
     id: int
     priority_lvl: Priority_Level

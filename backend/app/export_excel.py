@@ -29,7 +29,10 @@ TABLES = [
     ("Organisations", "organisations"),
     ("Leads", "leads"),
     ("Customers", "customers"),
-    ("Deals", "deals"),
+    ("Orders", "orders"),
+    ("Inventory", "inventory"),
+    ("Carts", "carts"),
+    ("Tasks", "tasks"),
     ("Emails", "emails"),
     ("Campaigns", "campaigns"),
 ]

@@ -20,16 +20,25 @@ from sqlalchemy import text
 from crud import (
     crud_campaign,
     crud_customer,
-    crud_deal,
     crud_email,
     crud_lead,
     crud_organisation,
     crud_user,
 )
+from seeds_woodcraft import (
+    backfill_source,
+    seed_carts,
+    seed_inventory,
+    seed_orders,
+    seed_tasks,
+)
 from database.database import SessionLocal
 
 # Truncated in one statement so foreign keys never block the wipe.
-TABLES = "users, organisations, leads, customers, deals, emails, campaigns"
+TABLES = (
+    "users, organisations, leads, customers, emails, campaigns, "
+    "inventory, orders, carts, tasks"
+)
 
 NOW = datetime.now()
 
@@ -131,38 +140,6 @@ def seed_customers(db):
     print(f"created {len(rows)} customers")
 
 
-def seed_deals(db):
-    # name, amount, stage, lead_id, customer_id, days_until_expiry, priority
-    rows = [
-        ("Northwind fleet rollout", 48500.00, "closed_won", 1, 1, 90, "high_priority"),
-        ("Northwind add-on seats", 7200.00, "negotiation", 2, 1, 30, "medium_priority"),
-        ("Vertex enterprise licence", 125000.00, "closed_won", 4, 2, 180, "overrider"),
-        ("Vertex compliance module", 34000.00, "proposal", 5, 2, 45, "high_priority"),
-        ("Brightline clinic pilot", 18900.00, "negotiation", 7, 3, 60, "high_priority"),
-        ("Brightline full deployment", 96000.00, "qualification", 7, 3, 120, "high_priority"),
-        ("Kestrel plant integration", 61500.00, "proposal", 9, None, 75, "medium_priority"),
-        ("Kestrel training package", 9800.00, "prospecting", 11, None, 40, "low_priority"),
-        ("Orion campaign tooling", 12400.00, "closed_lost", 12, None, -10, "low_priority"),
-        ("Copperfield renewal", 22000.00, "closed_won", None, 4, 365, "medium_priority"),
-        ("Saltmarsh onboarding", 15600.00, "negotiation", None, 5, 25, "medium_priority"),
-        ("Heron Bay pilot", 5400.00, "prospecting", None, 6, 50, "low_priority"),
-        ("Tessellate starter plan", 2900.00, "closed_won", None, 7, 300, "low_priority"),
-        ("Pinehurst site licence", 31000.00, "proposal", None, 8, 80, "medium_priority"),
-    ]
-    for name, amount, stage, lead_id, customer_id, days, priority in rows:
-        crud_deal.create_deal(
-            db,
-            name=name,
-            amount=amount,
-            stage=stage,
-            lead_id=lead_id,
-            customer_id=customer_id,
-            expiry_date=NOW + timedelta(days=days),
-            priority_lvl=priority,
-        )
-    print(f"created {len(rows)} deals")
-
-
 def seed_emails(db):
     # subject, body, recipient, lead_id, customer_id, priority
     rows = [
@@ -251,9 +228,13 @@ def main():
         seed_organisations(db)
         seed_leads(db)
         seed_customers(db)
-        seed_deals(db)
+        seed_inventory(db)
+        seed_orders(db)
+        seed_carts(db)
         seed_emails(db)
         seed_campaigns(db)
+        seed_tasks(db)
+        backfill_source(db)
         print("\nsample data ready - start the server and browse http://127.0.0.1:8000/docs")
     finally:
         db.close()

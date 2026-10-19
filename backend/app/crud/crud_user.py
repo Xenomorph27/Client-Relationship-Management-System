@@ -19,3 +19,25 @@ def get_user_by_email(db: Session, email: str):
 
 def get_all_users(db: Session, skip: int = 0, limit: int = 10):
     return db.query(User).offset(skip).limit(limit).all()
+
+
+def update_user(db: Session, user_id: int, payload: "UserUpdate"):
+    """exclude_unset is what makes this a real PATCH: a field the client did
+    not send stays untouched, instead of being overwritten with None."""
+    row = get_user(db, user_id)
+    if row is None:
+        return None
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def delete_user(db: Session, user_id: int) -> bool:
+    row = get_user(db, user_id)
+    if row is None:
+        return False
+    db.delete(row)
+    db.commit()
+    return True

@@ -12,6 +12,19 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+class UserUpdate(BaseModel):
+    """
+    No `password` field. Changing a password has to go through hashing,
+    and hashing is not built yet - accepting one here would write another
+    plaintext password into the database through a brand new route.
+    """
+
+    username: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    priority_lvl: Optional[Priority_Level] = None
+
+
 # Read model deliberately omits `password` so it is never returned in a response.
 class User(UserBase):
     id: int

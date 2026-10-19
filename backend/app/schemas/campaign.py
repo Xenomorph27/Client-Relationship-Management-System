@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel,Field
-from models.enums import Priority_Level
+from models.enums import Priority_Level, Source
 
 class CampaignBase(BaseModel):
 	name:str
@@ -10,9 +10,20 @@ class CampaignBase(BaseModel):
 	end_date:Optional[datetime]=None
 	description:Optional[str]=None
 	priority_lvl:Optional[Priority_Level]=None
+	source:Optional[Source]=None
 
 class CampaignCreate(CampaignBase):
     pass
+
+
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    html_content: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    description: Optional[str] = None
+    priority_lvl: Optional[Priority_Level] = None
+    source: Optional[Source] = None
 
 class Campaign(CampaignBase):
     id: int

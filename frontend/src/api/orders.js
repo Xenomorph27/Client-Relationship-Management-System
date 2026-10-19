@@ -1,14 +1,19 @@
 /**
  * Orders, and the stock rule that runs when one is placed.
  *
- * WARNING, and it matters: the check-then-decrement below is correct for a
- * single-user mock and WRONG for a real deployment. Two people ordering the
- * last chair at once would both pass the check and both decrement - a textbook
- * lost update. In production this belongs in ONE server-side transaction
- * (UPDATE ... WHERE quantity >= n, then inspect rows affected). It lives here
- * only because the mock has no server. See frontend/README.md.
+ * The rule exists twice, on purpose, and the two are NOT equivalent:
+ *
+ *   API mode   POST /orders/ - the server runs it in one transaction, with
+ *              the stock guard inside the UPDATE. This is the correct one.
+ *   mock mode  the check-then-decrement below. Fine for one person clicking
+ *              around with no server; WRONG for real use, because two people
+ *              ordering the last chair both pass the check and both decrement
+ *              - a textbook lost update.
+ *
+ * So the mock path is never the one that ships. It is reachable only when
+ * VITE_API_BASE_URL is unset, which is the standalone demo.
  */
-import { makeResource } from './client.js'
+import { http, makeResource, USING_API } from './client.js'
 import { adjustStock } from './inventory.js'
 import { createTask } from './tasks.js'
 import { tables } from '../mocks/db.js'
@@ -51,6 +56,14 @@ const blankTaskLinks = {
  * make the piece, through a task on the board people already watch.
  */
 export async function placeOrder(payload) {
+  if (USING_API) {
+    // The server decides stock_status, allocates order_ref and raises the
+    // making task, all in one transaction. Doing any of it here as well
+    // would double-count the decrement.
+    const result = await resource.create(payload)
+    return result?.order ?? result
+  }
+
   const item = payload.inventory_id ? itemById(payload.inventory_id) : null
   let stock_status = 'fulfilled'
 
@@ -100,6 +113,13 @@ export async function placeOrder(payload) {
  * bench instead of into stock.
  */
 export async function recordReturn(payload) {
+  if (USING_API) {
+    // POST /returns/ applies the right stock effect per return type and
+    // raises the rework task for exchange_modified.
+    const result = await http('/returns/', { method: 'POST', body: payload })
+    return result?.order ?? result
+  }
+
   const original = payload.returns_order_id
     ? tables.orders.find((o) => o.id === Number(payload.returns_order_id))
     : null
@@ -143,10 +163,18 @@ export async function recordReturn(payload) {
 
 /** Used by the Logistics board when a card is dragged between columns. */
 export const setDeliveryStatus = (id, delivery_status) =>
-  resource.update(id, {
-    delivery_status,
-    delivered_at: delivery_status === 'delivered' ? nowIso() : null,
-  })
+  resource.update(
+    id,
+    USING_API
+      ? // The server stamps delivered_at on arrival at "delivered" and
+        // clears it on the way back out. Sending our own value would let the
+        // browser's clock decide a cycle time.
+        { delivery_status }
+      : {
+          delivery_status,
+          delivered_at: delivery_status === 'delivered' ? nowIso() : null,
+        },
+  )
 
 /** Outstanding money, always derived so it cannot disagree with the deposit. */
 export const balanceOf = (order) =>

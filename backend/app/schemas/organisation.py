@@ -14,6 +14,15 @@ class OrganisationBase(BaseModel):
 class OrganisationCreate(OrganisationBase):
     pass
 
+
+class OrganisationUpdate(BaseModel):
+    name: Optional[str] = None
+    website: Optional[str] = None
+    industry: Optional[str] = None
+    official_email: Optional[str] = None
+    support_contact: Optional[str] = None
+    priority_lvl: Optional[Priority_Level] = None
+
 class Organisation(OrganisationBase):
     id: int
     priority_lvl: Priority_Level

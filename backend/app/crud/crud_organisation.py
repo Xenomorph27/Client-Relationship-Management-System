@@ -13,3 +13,25 @@ def get_organisation(db: Session, organisation_id: int):
     return db.query(Organisation).filter(Organisation.id == organisation_id).first()
 def get_all_organisations(db: Session, skip: int = 0, limit: int = 10):
     return db.query(Organisation).offset(skip).limit(limit).all()
+
+
+def update_organisation(db: Session, organisation_id: int, payload: "OrganisationUpdate"):
+    """exclude_unset is what makes this a real PATCH: a field the client did
+    not send stays untouched, instead of being overwritten with None."""
+    row = get_organisation(db, organisation_id)
+    if row is None:
+        return None
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def delete_organisation(db: Session, organisation_id: int) -> bool:
+    row = get_organisation(db, organisation_id)
+    if row is None:
+        return False
+    db.delete(row)
+    db.commit()
+    return True

@@ -11,44 +11,68 @@ npm run dev      # http://localhost:5173
 npm run build    # production build into dist/
 ```
 
-## It does not talk to the backend yet
+## Two data sources, one switch
 
-Every screen reads through `src/api/`, which currently serves the in-memory
-records in `src/mocks/db.js`. Those records mirror `backend/app/seed.py` exactly,
-and the field names match the Pydantic read schemas in `backend/app/schemas/`.
+Every screen reads through `src/api/`. Which transport it uses is decided by a
+single environment variable, read in `src/api/client.js`:
 
-**To wire the real API, change only `src/api/client.js`.** Each method becomes a
-`fetch()` against `http://127.0.0.1:8000`. Function names, arguments and return
-shapes already match the REST API, so no screen has to change.
+| `VITE_API_BASE_URL` | What runs |
+|---|---|
+| unset | The in-memory sample records in `src/mocks/db.js` |
+| set, e.g. `http://127.0.0.1:8000` | Real `fetch()` calls to the FastAPI backend |
 
-Before that will work, the backend needs:
+```bash
+cp .env.example .env.local     # then npm run dev
+```
+
+Both are kept rather than the mock being deleted, because they do different
+jobs. **The deployed demo has no backend to reach**, so without the sample
+tables it would be a wall of error states; and the frontend stays developable
+with the API switched off. Nothing above `client.js` knows which is running.
+
+The mock rows are the same rows `backend/app/seeds_woodcraft.py` loads, so
+switching transports should change nothing on screen. Anything that *does*
+change is a wiring bug.
+
+### The stock rule exists twice, and they are not equivalent
+
+| Mode | Where it runs |
+|---|---|
+| API | `POST /orders/` - one transaction, guard inside the `UPDATE`. **Correct.** |
+| mock | `placeOrder` in `src/api/orders.js` - check, then decrement. **Race-prone.** |
+
+The mock version is fine for one person clicking around with no server, and
+wrong for real use: two people ordering the last chair both pass the check and
+both decrement. It is only reachable when `VITE_API_BASE_URL` is unset.
+
+### What the backend still owes this frontend
 
 | Missing | Why it matters |
 |---|---|
-| `PATCH` and `DELETE` on all 7 entities | The UI's edit and delete have no endpoint to call. `backend/app/crud/*` only has create / get one / get all. |
-| CORS middleware in `main.py` | A browser will not call the API at all without it. |
-| **`orders` and `inventory` and `carts` tables** | The woodcraft core. `delivery_status`, `return_type`, `item_class` and `source` must be **real enums**, not free text - the mistake `deals.stage` made. |
-| **The stock rule must move server-side** | `placeOrder` in `src/api/orders.js` does check-then-decrement in the browser. That is correct for a single-user mock and **wrong in production**: two people ordering the last chair would both pass the check and both decrement. It belongs in one transaction (`UPDATE ... WHERE quantity >= n`, then inspect rows affected). |
-| **Deals is deleted** | `models/deals.py` plus its schema, CRUD and router go; needs a follow-up Alembic revision. |
-| **A `tasks` table** | The Todo screen invents this entity; nothing backs it. Needs model, schema, CRUD (including update and delete), router, and a migration. |
-| **`owner_id` on `orders`** | The team section needs it: who made each piece. |
-| **`closed_at` on `deals`** | Without it there is no real cycle time. `expiry_date` is when a deal lapses, not when it was won — deriving "time to close" from it reported a median of 316 days, so the screen shows average age of open deals instead. |
-| **A `/stats` endpoint** | `models/analytics.py` is still an empty stub. Aggregates belong in SQL, not computed in the browser over full lists the way `src/api/stats.js` does now. |
-| Server-side search, sort and filter | `get_all_*` takes only `skip`/`limit`; the UI does this client-side today. |
-| `stage` as an enum on `models/deals.py` | It is free text, but the kanban needs a fixed set of columns. |
-| A stats endpoint (optional) | The overview computes its figures from full lists. |
+| **Login, and password hashing** | `models/users.py` stores passwords in plain text and no endpoint requires authentication. Anyone with the URL can read or delete every record. |
+| A `/stats` endpoint | `src/api/stats.js` computes every aggregate in the browser over full lists. Deliberately not built yet: a second implementation of the same sums could disagree with the screens it is meant to summarise. It becomes necessary once row counts outgrow the 500-row page below. |
+| Server-side search, sort and filter | `get_all_*` takes `skip`/`limit` plus a few enum filters; everything else is client-side. |
+| Real pagination | `client.js` asks for 500 rows and the backend caps at what it is given. Past that, tables silently truncate and the aggregates under-count. |
+| A sequence for `order_ref` | `next_order_ref` reads the highest number then adds one. Two simultaneous orders can compute the same reference; the unique index turns that into a failed insert rather than a duplicate, but a Postgres sequence would remove the race. |
+| Multi-item orders | One order is one line item. The stock rule is written to extend to line items without restructuring. |
+
+Already built: `orders`, `inventory`, `carts` and `tasks` tables with real
+Postgres enums; `source` on orders, leads, customers and campaigns; the stock
+rule server-side in one transaction; `PATCH` and `DELETE` on every entity;
+CORS; `owner_id` on orders; `delivered_at`, which is what finally makes real
+cycle time derivable. Deals is deleted - model, schema, CRUD, router and table.
 
 ## Layout
 
 ```
 src/
 ├── api/          one module per entity + client.js  <- the swap point
-├── mocks/        seed-mirroring records, mutable for the session
+├── mocks/        seed-mirroring records, used when no API is configured
 ├── components/
 │   ├── layout/   Sidebar, PageHeader, AppShell
 │   ├── ui/       Button, Chips, Field, Drawer, ConfirmDialog, EmptyState
 │   └── data/     DataTable, FormDrawer, Toolbar, StatTile, PipelineBar
-├── pages/        one per screen (8) + NotFound
+├── pages/        one per screen (14) + NotFound
 ├── hooks/        useAsync - loading / error / data, used by every screen
 └── lib/          format.js (display), domain.js (vocabulary + colour encoding)
 ```
@@ -69,13 +93,16 @@ that never overlap, so a coloured cell is never ambiguous:
   can be acted on.
 - **`priority_lvl`** is ordinal, so it is one heat ramp: a solid red fill at the
   top receding to a bare outline at the bottom. Never five unrelated hues.
-- **`stage`** is pipeline position, so open stages are a sequential violet ramp
-  that brightens as a deal advances. The two closed outcomes sit outside it as
-  status colours.
+- **`delivery_status`** is a position in a sequence, so it reads as a
+  sequential ramp that brightens as an order moves towards the door.
+- **Categorical data** on charts uses the validated set in
+  `src/lib/chartPalette.js`; magnitude uses a single hue, because different
+  colours per row would imply different *kinds* of thing rather than different
+  sizes of the same thing.
 
-The stage ramp was checked with a palette validator, not by eye. An earlier
-blue-and-amber set was replaced because Qualification and Proposal measured
-deltaE 6.0 apart in normal vision, which is not a distinction at all.
+Ramps are checked with a palette validator, not by eye. An earlier
+blue-and-amber set was thrown out because two adjacent steps measured deltaE
+6.0 apart in normal vision, which is not a distinction at all.
 
 ### Screen identity
 
@@ -87,13 +114,22 @@ brand mark. No component takes a theme prop.
 
 | Screen | Hue | Screen | Hue |
 |---|---|---|---|
-| Overview | azure | Organisations | periwinkle |
+| Overview | azure | Customers | emerald |
+| Todo | coral | Organisations | periwinkle |
 | Leads | cyan | Emails | orchid |
-| Deals | violet | Campaigns | rose |
-| Customers | emerald | People | lime |
+| Orders | green | Campaigns | rose |
+| Returns | deep green | Insights | magenta |
+| Logistics | violet | Statistics | amber |
+| Inventory | yellow | People | lime |
+
+Orders and Returns sit only 20 degrees apart **on purpose**: they are the same
+table inverted, so the colour should say "sibling" rather than "unrelated
+thing". Insights was moved to magenta because it shares a sidebar group with
+Statistics - group-mates are the one case where two screens really are seen
+side by side.
 
 **Screen hues appear in chrome only, never inside a data cell.** That is what
-keeps them from competing with the priority and stage encodings above: those
+keeps them from competing with the priority and status encodings above: those
 live in chips and marks, screen colour lives in the furniture around them, and
 the two never occupy the same place.
 
