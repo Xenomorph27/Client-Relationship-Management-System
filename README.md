@@ -1,35 +1,45 @@
-<div align="center">
+<img src="docs/assets/banner.png" alt="Client Desk — CRM overview with in-flight orders and screen colours" width="100%">
 
-<img src="docs/assets/banner.png" alt="Client Desk" height="72">
+<table>
+<tr>
+<td width="64%">
 
-<br/>
+### Client Desk
 
-![React](https://img.shields.io/badge/React-19-20232A?labelColor=30363d&logo=react&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-8-646CFF?labelColor=30363d&logo=vite&logoColor=white) ![Tailwind](https://img.shields.io/badge/Tailwind-4-0F172A?labelColor=30363d&logo=tailwindcss&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-SQLAlchemy_2-009688?labelColor=30363d&logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Alembic-4169E1?labelColor=30363d&logo=postgresql&logoColor=white) [![License](https://img.shields.io/badge/License-MIT-3B82F6?labelColor=30363d)](LICENSE)
+**A CRM for a woodcraft business.** Orders, logistics, inventory and outreach on one dark, dense desk —
+every screen answers *"what needs me today?"* before it shows you a table.
 
-<br/>
+</td>
+<td>
 
-<img src="docs/assets/card.png" alt="14 screens — runs with or without a backend" height="60">
+<img alt="React 19" src="https://img.shields.io/badge/React_19-060910?style=flat&logo=react&logoColor=61dafb"><br>
+<img alt="Vite 8" src="https://img.shields.io/badge/Vite_8-060910?style=flat&logo=vite&logoColor=a78bfa"><br>
+<img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind_4-060910?style=flat&logo=tailwindcss&logoColor=38bdf8"><br>
+<img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-060910?style=flat&logo=fastapi&logoColor=34d399"><br>
+<img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-060910?style=flat&logo=postgresql&logoColor=93c5fd"><br>
+<a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-060910?style=flat"></a>
 
-<br/><br/>
+</td>
+</tr>
+</table>
 
-[Features](#features) | [Screenshots](#screenshots) | [Design](#design) | [Architecture](#architecture) | [Getting started](#getting-started)
+<p>
+  <a href="#features"><img alt="Features" src="https://img.shields.io/badge/Features-3b82f6?style=flat-square"></a>
+  <a href="#screenshots"><img alt="Screenshots" src="https://img.shields.io/badge/Screenshots-22c55e?style=flat-square"></a>
+  <a href="#design"><img alt="Design" src="https://img.shields.io/badge/Design-8b5cf6?style=flat-square"></a>
+  <a href="#architecture"><img alt="Architecture" src="https://img.shields.io/badge/Architecture-f59e0b?style=flat-square"></a>
+  <a href="#getting-started"><img alt="Getting started" src="https://img.shields.io/badge/Getting_started-f97362?style=flat-square"></a>
+  <a href="#roadmap"><img alt="Roadmap" src="https://img.shields.io/badge/Roadmap-a3e635?style=flat-square"></a>
+</p>
 
-</div>
+### Release notes
 
----
+**v0.2.0** · *October 2026*
+- **Full stack connected** — the frontend reads and writes PostgreSQL through FastAPI, and the stock rule runs server-side in a single transaction.
+- **New frontend** — 14 screens, a per-screen colour system, and sample data so it runs without a backend.
 
-# Client Desk: A CRM for a Woodcraft Business
-
-Orders, logistics, inventory and outreach on one dark, dense desk — built to be read at a glance rather than browsed, so every screen answers "what needs me today?" before it shows you a table.
-
-## News
-
-- [2026-10] **Full stack connected:** the frontend now reads and writes PostgreSQL through FastAPI, and the stock rule moved server-side into a single transaction.
-- [2026-10] **New frontend:** 14 screens — orders, returns, logistics board, inventory, insights, statistics — with a per-screen colour system and sample data so it runs without a backend.
-- [2026-08] **Data model:** leads, organisations, customers and emails with a CRUD layer and Alembic migrations.
-
-<img src="docs/screenshots/overview.png" alt="Overview screen: in-flight orders by stage, headline numbers, orders needing a decision and the latest email" width="100%">
-
+**First backend** · *August 2026*
+- Leads, organisations, customers and emails, with a CRUD layer and Alembic migrations.
 
 ---
 
@@ -68,8 +78,10 @@ Orders, logistics, inventory and outreach on one dark, dense desk — built to b
 </table>
 
 <details>
-<summary><b>Inventory</b></summary>
+<summary><b>Overview and Inventory</b></summary>
 <br/>
+<img alt="Overview screen: in-flight orders by stage, headline numbers, orders needing a decision and the latest email" src="docs/screenshots/overview.png" width="100%">
+<br/><br/>
 <img alt="Inventory screen" src="docs/screenshots/inventory.png" width="100%">
 </details>
 
