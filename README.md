@@ -1,25 +1,35 @@
 <div align="center">
 
-# Client Desk — CRM
-
-### A CRM for a woodcraft business — orders, logistics, inventory and outreach on one dark, dense desk
-
-Built to be read at a glance rather than browsed: every screen answers "what needs me today?"
-before it shows you a table.
-
-![React](https://img.shields.io/badge/React_19-20232a?logo=react&logoColor=61dafb)
-![Vite](https://img.shields.io/badge/Vite_8-646cff?logo=vite&logoColor=white)
-![Tailwind](https://img.shields.io/badge/Tailwind_4-0f172a?logo=tailwindcss&logoColor=38bdf8)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy_2-d71f00?logo=sqlalchemy&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169e1?logo=postgresql&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+<img src="docs/assets/banner.png" alt="Client Desk" height="72">
 
 <br/>
 
-<img src="docs/screenshots/overview.png" alt="Overview screen: in-flight orders by stage, headline numbers, orders needing a decision and the latest email" width="100%">
+![React](https://img.shields.io/badge/React-19-20232A?labelColor=30363d&logo=react&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-8-646CFF?labelColor=30363d&logo=vite&logoColor=white) ![Tailwind](https://img.shields.io/badge/Tailwind-4-0F172A?labelColor=30363d&logo=tailwindcss&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-SQLAlchemy_2-009688?labelColor=30363d&logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Alembic-4169E1?labelColor=30363d&logo=postgresql&logoColor=white) [![License](https://img.shields.io/badge/License-MIT-3B82F6?labelColor=30363d)](LICENSE)
+
+<br/>
+
+<img src="docs/assets/card.png" alt="14 screens — runs with or without a backend" height="60">
+
+<br/><br/>
+
+[Features](#features) | [Screenshots](#screenshots) | [Design](#design) | [Architecture](#architecture) | [Getting started](#getting-started)
 
 </div>
+
+---
+
+# Client Desk: A CRM for a Woodcraft Business
+
+Orders, logistics, inventory and outreach on one dark, dense desk — built to be read at a glance rather than browsed, so every screen answers "what needs me today?" before it shows you a table.
+
+## News
+
+- [2026-10] **Full stack connected:** the frontend now reads and writes PostgreSQL through FastAPI, and the stock rule moved server-side into a single transaction.
+- [2026-10] **New frontend:** 14 screens — orders, returns, logistics board, inventory, insights, statistics — with a per-screen colour system and sample data so it runs without a backend.
+- [2026-08] **Data model:** leads, organisations, customers and emails with a CRUD layer and Alembic migrations.
+
+<img src="docs/screenshots/overview.png" alt="Overview screen: in-flight orders by stage, headline numbers, orders needing a decision and the latest email" width="100%">
+
 
 ---
 
