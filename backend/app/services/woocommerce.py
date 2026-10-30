@@ -59,6 +59,7 @@ from models.inventory import InventoryItem
 from models.lead import Lead
 from models.orders import Order
 from models.tasks import Task
+from models.web_orders import WebOrder
 from schemas.order import OrderCreate, OrderUpdate, ReturnCreate
 from settings import settings
 
@@ -277,6 +278,70 @@ def item_for_line(db: Session, line: dict) -> InventoryItem:
 # ---------------------------------------------------------------------------
 
 
+def _parse_dt(value) -> Optional[datetime]:
+    """WooCommerce dates arrive as "2026-10-30T12:00:00" (sometimes with a Z)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def upsert_web_order(db: Session, payload: dict, customer: Optional[Customer]) -> WebOrder:
+    """Create or refresh the shop-order row (address, payment, totals, status)."""
+    woo_id = int(payload.get("id") or _order_number(payload))
+    row = db.query(WebOrder).filter(WebOrder.woo_id == woo_id).first()
+
+    billing = payload.get("billing") or {}
+    shipping = payload.get("shipping") or {}
+    # Use the delivery address when one was given, otherwise the billing one,
+    # so ship_* is always the address to send the parcel to.
+    has_shipping = any((shipping.get(k) or "").strip() for k in ("address_1", "postcode", "city"))
+    to = shipping if has_shipping else billing
+
+    def name_of(block):
+        return " ".join(p for p in (_clean(block.get("first_name")), _clean(block.get("last_name"))) if p) or None
+
+    methods = [_clean(line.get("method_title")) for line in payload.get("shipping_lines") or [] if line.get("method_title")]
+
+    values = dict(
+        number=_order_number(payload),
+        status=(payload.get("status") or "").lower()[:32],
+        email=(billing.get("email") or "").strip().lower() or None,
+        phone=(billing.get("phone") or shipping.get("phone") or "").strip() or None,
+        billing_name=name_of(billing),
+        ship_name=name_of(to),
+        ship_company=_clean(to.get("company")) or None,
+        ship_address_1=_clean(to.get("address_1")) or None,
+        ship_address_2=_clean(to.get("address_2")) or None,
+        ship_city=_clean(to.get("city")) or None,
+        ship_county=_clean(to.get("state")) or None,
+        ship_postcode=(_clean(to.get("postcode")) or "")[:16] or None,
+        ship_country=(_clean(to.get("country")) or "")[:2] or None,
+        shipping_method=", ".join(methods) or None,
+        shipping_total=_money(payload.get("shipping_total")) + _money(payload.get("shipping_tax")),
+        total=_money(payload.get("total")),
+        currency=(payload.get("currency") or "GBP")[:3],
+        payment_method=_clean(payload.get("payment_method_title")) or None,
+        customer_note=_clean(payload.get("customer_note")) or None,
+        placed_at=_parse_dt(payload.get("date_created_gmt") or payload.get("date_created")),
+        paid_at=_parse_dt(payload.get("date_paid_gmt") or payload.get("date_paid")),
+        completed_at=_parse_dt(payload.get("date_completed_gmt") or payload.get("date_completed")),
+    )
+    if customer is not None:
+        values["customer_id"] = customer.id
+
+    if row is None:
+        row = WebOrder(woo_id=woo_id, **values)
+        db.add(row)
+    else:
+        for field, value in values.items():
+            setattr(row, field, value)
+    db.flush()
+    return row
+
+
 def _unit_prices(line: dict, quantity: int) -> list:
     """Split the line's total (after discounts, including tax) across its units,
     putting any rounding penny on the last one so the CRM total matches the shop."""
@@ -327,6 +392,7 @@ def _apply_order(db: Session, payload: dict, number: str, status: str) -> dict:
             result["skipped"] = "not paid or not taken in yet"
             return result
         customer = customer_from_order(db, payload)
+        web_order = upsert_web_order(db, payload, customer)
         paid = status in PAID or bool(payload.get("date_paid") or payload.get("date_paid_gmt"))
         note = _clean(payload.get("customer_note")) or None
         n = 0
@@ -348,6 +414,7 @@ def _apply_order(db: Session, payload: dict, number: str, status: str) -> dict:
                         delivery_status=Delivery_Status.processing,
                         inventory_id=item.id,
                         customer_id=customer.id if customer else None,
+                        web_order_id=web_order.id,
                     ),
                 )
                 result["created"] += 1
@@ -358,7 +425,16 @@ def _apply_order(db: Session, payload: dict, number: str, status: str) -> dict:
                     db.commit()
         return result
 
-    # Already taken in: apply status changes.
+    # Already taken in: refresh the shop-order row (status, address edits made
+    # in the shop admin) and make sure every piece points at it - pieces
+    # taken in before web_orders existed are linked here on the next sync.
+    web_order = upsert_web_order(db, payload, None)
+    for row in rows:
+        if row.web_order_id is None:
+            row.web_order_id = web_order.id
+    db.commit()
+
+    # Then apply status changes.
     if status in PAID:
         for row in rows:
             if row.deposit_paid < row.price:

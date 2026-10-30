@@ -1,14 +1,15 @@
 /** Display formatting. Nothing here touches data shape, only presentation. */
 
-const money = new Intl.NumberFormat('en-US', {
+// Pounds sterling: the business and every price in the shop are in GBP.
+const money = new Intl.NumberFormat('en-GB', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'GBP',
   maximumFractionDigits: 0,
 })
 
-const moneyExact = new Intl.NumberFormat('en-US', {
+const moneyExact = new Intl.NumberFormat('en-GB', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'GBP',
   minimumFractionDigits: 2,
 })
 
@@ -22,9 +23,9 @@ export const formatAmountExact = (value) =>
 /** Compact form for chart axes and column totals. */
 export function formatCompact(value) {
   const n = Number(value ?? 0)
-  if (Math.abs(n) >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M'
-  if (Math.abs(n) >= 1_000) return '$' + Math.round(n / 1_000) + 'k'
-  return '$' + n
+  if (Math.abs(n) >= 1_000_000) return '£' + (n / 1_000_000).toFixed(1) + 'M'
+  if (Math.abs(n) >= 1_000) return '£' + Math.round(n / 1_000) + 'k'
+  return '£' + n
 }
 
 const asDate = (value) => (value ? new Date(value) : null)
