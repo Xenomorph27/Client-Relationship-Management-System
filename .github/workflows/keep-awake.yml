@@ -1,0 +1,36 @@
+# Keeps the CRM backend on Render's free plan from falling asleep.
+#
+# A free Render service sleeps after 15 minutes without traffic and takes
+# about a minute to wake. WooCommerce does not wait that long for a webhook,
+# and it switches a webhook off after five failed deliveries in a row, so the
+# backend must stay awake. This pings /health every 10 minutes.
+#
+# GitHub runs scheduled jobs on a best-effort basis (sometimes a few minutes
+# late). The backend's catch-up sync re-reads recent shop orders every
+# 15 minutes, so an order that arrives during a rare nap is still picked up.
+#
+# Delete this file after moving the service to a paid Render plan.
+name: Keep CRM backend awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 90 https://sapphire-crm-api.onrender.com/health; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Backend did not answer after 3 tries" >&2
+          exit 1
