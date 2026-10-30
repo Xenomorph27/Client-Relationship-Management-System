@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       Sapphire CRM Bridge
- * Description:       Enquiry form for the Contact and Commissions pages. Each enquiry is emailed to you and sent to the Sapphire Woodcrafts CRM as a Lead with a reply task. Add it to a page with [sapphire_enquiry_form] or [sapphire_enquiry_form kind="commission"].
- * Version:           1.0.0
+ * Description:       Connects the shop to the Sapphire Woodcrafts CRM: sets up and looks after the WooCommerce webhooks that send orders, customers and products, and adds an enquiry form for the Contact and Commissions pages ([sapphire_enquiry_form] or [sapphire_enquiry_form kind="commission"]).
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Sapphire Woodcrafts
@@ -15,6 +15,13 @@
  * Never loses an enquiry:
  *   1. It is always emailed to the notification address.
  *   2. If the CRM cannot be reached, the enquiry is queued and retried hourly.
+ *
+ * Shop webhooks: saving the settings creates (or updates) one WooCommerce
+ * webhook per topic in SW_CRM_TOPICS, all signed with the same secret, so the
+ * secret is pasted once instead of six times. WooCommerce switches a webhook
+ * off after five failed deliveries in a row (for example while the CRM is
+ * restarting); the hourly job switches ours back on. Orders sent while a
+ * webhook was off are picked up by the CRM's own catch-up sync.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -24,14 +31,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'SW_CRM_OPTION', 'sw_crm_bridge' );
 define( 'SW_CRM_QUEUE', 'sw_crm_bridge_queue' );
 define( 'SW_CRM_STATUS', 'sw_crm_bridge_status' );
+define( 'SW_CRM_HOOK_PREFIX', 'Sapphire CRM - ' );
+define( 'SW_CRM_TOPICS', array( 'order.created', 'order.updated', 'customer.created', 'customer.updated', 'product.created', 'product.updated' ) );
 
 function sw_crm_settings() {
 	return wp_parse_args(
 		get_option( SW_CRM_OPTION, array() ),
 		array(
-			'api_url' => '',
-			'secret'  => '',
-			'notify'  => get_option( 'admin_email' ),
+			'api_url'   => '',
+			'secret'    => '',
+			'wc_secret' => '',
+			'notify'    => get_option( 'admin_email' ),
 		)
 	);
 }
@@ -58,13 +68,15 @@ function sw_crm_sanitize( $input ) {
 	$old    = sw_crm_settings();
 	$input  = is_array( $input ) ? $input : array();
 	$secret = isset( $input['secret'] ) ? trim( (string) $input['secret'] ) : '';
+	$wc     = isset( $input['wc_secret'] ) ? trim( (string) $input['wc_secret'] ) : '';
 	$notify = isset( $input['notify'] ) ? sanitize_email( $input['notify'] ) : '';
 	return array(
-		'api_url' => isset( $input['api_url'] ) ? esc_url_raw( untrailingslashit( trim( $input['api_url'] ) ) ) : '',
-		// A blank secret field means "keep the saved one", so the secret never
+		'api_url'   => isset( $input['api_url'] ) ? esc_url_raw( untrailingslashit( trim( $input['api_url'] ) ) ) : '',
+		// A blank secret field means "keep the saved one", so a secret never
 		// has to be shown on the page to be preserved.
-		'secret'  => '' !== $secret ? $secret : $old['secret'],
-		'notify'  => $notify ? $notify : get_option( 'admin_email' ),
+		'secret'    => '' !== $secret ? $secret : $old['secret'],
+		'wc_secret' => '' !== $wc ? $wc : $old['wc_secret'],
+		'notify'    => $notify ? $notify : get_option( 'admin_email' ),
 	);
 }
 
@@ -83,7 +95,8 @@ function sw_crm_settings_page() {
 	?>
 	<div class="wrap">
 		<h1>Sapphire CRM</h1>
-		<p>Enquiry forms send each enquiry to the CRM and email a copy to the notification address.
+		<p>Sends shop orders, customers and products to the CRM through WooCommerce webhooks, which this page sets up and keeps switched on.
+			Enquiry forms send each enquiry to the CRM and email a copy to the notification address.
 			Add a form to any page with <code>[sapphire_enquiry_form]</code>, or <code>[sapphire_enquiry_form kind="commission"]</code> on the Commissions page.</p>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'sw_crm_bridge' ); ?>
@@ -96,7 +109,12 @@ function sw_crm_settings_page() {
 				<tr>
 					<th scope="row"><label for="sw_secret">Shared secret</label></th>
 					<td><input id="sw_secret" class="regular-text" type="password" autocomplete="new-password" name="<?php echo esc_attr( SW_CRM_OPTION ); ?>[secret]" value="" placeholder="<?php echo $s['secret'] ? esc_attr__( 'Saved. Leave blank to keep it.' ) : ''; ?>">
-						<p class="description">Must match WEBSITE_ENQUIRY_SECRET on the backend.</p></td>
+						<p class="description">Enquiry secret: WEBSITE_ENQUIRY_SECRET from Render.</p></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="sw_wc_secret">Shop webhook secret</label></th>
+					<td><input id="sw_wc_secret" class="regular-text" type="password" autocomplete="new-password" name="<?php echo esc_attr( SW_CRM_OPTION ); ?>[wc_secret]" value="" placeholder="<?php echo $s['wc_secret'] ? esc_attr__( 'Saved. Leave blank to keep it.' ) : ''; ?>">
+						<p class="description">WC_WEBHOOK_SECRET from Render. Saving creates or updates the shop's webhooks.</p></td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="sw_notify">Email enquiries to</label></th>
@@ -109,6 +127,25 @@ function sw_crm_settings_page() {
 		<p>Last enquiry sent to the CRM: <strong><?php echo esc_html( isset( $status['last_ok'] ) ? $status['last_ok'] : 'none yet' ); ?></strong><br>
 			Last problem: <strong><?php echo esc_html( isset( $status['last_error'] ) ? $status['last_error'] : 'none' ); ?></strong><br>
 			Waiting to retry: <strong><?php echo (int) count( $queue ); ?></strong></p>
+		<h2>Shop webhooks</h2>
+		<?php $hooks = sw_crm_our_webhooks(); ?>
+		<?php if ( ! class_exists( 'WC_Webhook' ) ) : ?>
+			<p>WooCommerce is not active.</p>
+		<?php elseif ( ! $hooks ) : ?>
+			<p>None yet. Fill in the CRM address and the shop webhook secret above and save.</p>
+		<?php else : ?>
+			<table class="widefat striped" style="max-width:720px">
+				<thead><tr><th>Topic</th><th>Status</th><th>Failed deliveries in a row</th></tr></thead>
+				<tbody>
+				<?php foreach ( $hooks as $hook ) : ?>
+					<tr><td><code><?php echo esc_html( $hook->get_topic() ); ?></code></td>
+						<td><?php echo esc_html( $hook->get_status() ); ?></td>
+						<td><?php echo (int) $hook->get_failure_count(); ?></td></tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			<p class="description">Last check: <?php echo esc_html( isset( $status['webhooks'] ) ? $status['webhooks'] : 'not yet' ); ?></p>
+		<?php endif; ?>
 		<p><a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'options-general.php?page=sw-crm-bridge&sw_test=1' ), 'sw_crm_test' ) ); ?>">Test connection</a>
 			<?php if ( null !== $health ) : ?>
 				&nbsp; Result: <code><?php echo esc_html( $health ); ?></code>
@@ -307,6 +344,7 @@ function sw_crm_note( $field, $value ) {
  * ---------------------------------------------------------------------- */
 
 add_action( 'sw_crm_retry', 'sw_crm_retry_queue' );
+add_action( 'sw_crm_retry', 'sw_crm_sync_webhooks' );
 
 function sw_crm_retry_queue() {
 	$queue = get_option( SW_CRM_QUEUE, array() );
@@ -320,6 +358,90 @@ function sw_crm_retry_queue() {
 		}
 	}
 	update_option( SW_CRM_QUEUE, $left, false );
+}
+
+/* -------------------------------------------------------------------------
+ * Shop webhooks
+ * ---------------------------------------------------------------------- */
+
+// Saving the settings (first time or later) brings the webhooks in line.
+add_action( 'add_option_' . SW_CRM_OPTION, 'sw_crm_sync_webhooks' );
+add_action( 'update_option_' . SW_CRM_OPTION, 'sw_crm_sync_webhooks' );
+
+/** Our webhooks, recognised by name. */
+function sw_crm_our_webhooks() {
+	if ( ! class_exists( 'WC_Webhook' ) || ! class_exists( 'WC_Data_Store' ) ) {
+		return array();
+	}
+	$store = WC_Data_Store::load( 'webhook' );
+	$ids   = $store->search_webhooks( array( 'search' => SW_CRM_HOOK_PREFIX, 'limit' => -1 ) );
+	$hooks = array();
+	foreach ( (array) $ids as $id ) {
+		$hook = wc_get_webhook( $id );
+		if ( $hook && 0 === strpos( $hook->get_name(), SW_CRM_HOOK_PREFIX ) ) {
+			$hooks[] = $hook;
+		}
+	}
+	return $hooks;
+}
+
+/** A user the webhooks can run as: it needs to be able to read orders. */
+function sw_crm_webhook_user() {
+	$me = get_current_user_id();
+	if ( $me && user_can( $me, 'manage_woocommerce' ) ) {
+		return $me;
+	}
+	$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+	return $admins ? (int) $admins[0] : 0;
+}
+
+/**
+ * Make sure there is one active webhook per topic, pointing at the CRM and
+ * signed with the saved secret. Safe to run any number of times.
+ */
+function sw_crm_sync_webhooks() {
+	$s = sw_crm_settings();
+	if ( ! class_exists( 'WC_Webhook' ) || ! $s['api_url'] || ! $s['wc_secret'] ) {
+		return;
+	}
+	$url      = $s['api_url'] . '/integrations/woocommerce/webhook';
+	$existing = array();
+	foreach ( sw_crm_our_webhooks() as $hook ) {
+		$existing[ $hook->get_topic() ] = $hook;
+	}
+	$done = array();
+	foreach ( SW_CRM_TOPICS as $topic ) {
+		$hook = isset( $existing[ $topic ] ) ? $existing[ $topic ] : new WC_Webhook();
+		if ( ! $hook->get_id() ) {
+			$hook->set_name( SW_CRM_HOOK_PREFIX . $topic );
+			$hook->set_topic( $topic );
+			$hook->set_user_id( sw_crm_webhook_user() );
+		}
+		$changed = false;
+		if ( $hook->get_delivery_url() !== $url ) {
+			$hook->set_delivery_url( $url );
+			$changed = true;
+		}
+		if ( $hook->get_secret() !== $s['wc_secret'] ) {
+			$hook->set_secret( $s['wc_secret'] );
+			$changed = true;
+		}
+		if ( 'wp_api_v3' !== $hook->get_api_version() ) {
+			$hook->set_api_version( 'wp_api_v3' );
+			$changed = true;
+		}
+		if ( 'active' !== $hook->get_status() ) {
+			// Switched off by WooCommerce after repeated failures, or new.
+			$hook->set_status( 'active' );
+			$hook->set_failure_count( 0 );
+			$changed = true;
+		}
+		if ( $changed || ! $hook->get_id() ) {
+			$hook->save();
+			$done[] = $topic;
+		}
+	}
+	sw_crm_note( 'webhooks', current_time( 'mysql' ) . ( $done ? ' (updated: ' . implode( ', ', $done ) . ')' : ' (all fine)' ) );
 }
 
 register_activation_hook(
