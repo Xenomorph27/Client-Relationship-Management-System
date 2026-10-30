@@ -8,7 +8,7 @@ steps in order; each one needs something from the step before.
  WordPress + WooCommerce  ──────▶  CRM backend (FastAPI)  ──────▶  Postgres database
    • orders, customers,   webhooks   • /integrations/...             • CRM tables
      products             + catch-up • staff-only CRM API            • staff logins (Auth)
-   • enquiry form plugin  ─────────▶                    ◀──────  CRM frontend (Vercel)
+   • enquiry form plugin  ─────────▶                    ◀──────  CRM screens (Render)
                                                          staff sign in with Supabase Auth
 ```
 
@@ -26,7 +26,7 @@ Never commit any of these. Each is typed once, into the place listed.
 The Supabase publishable key is not a secret (it is meant for browser code and
 cannot read any table); it sits in `render.yaml` for the static site.
 
-## 1. Database: Supabase (London)
+## 1. Database: Supabase (Ireland, eu-west-1)
 
 1. Create the project in a European region. Save the generated password.
    Untick "Automatically expose new tables"; tick "Enable automatic RLS".
