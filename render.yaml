@@ -40,9 +40,10 @@ services:
       - key: STAFF_EMAILS # comma separated; at least your own email
         sync: false
 
-      # The deployed CRM frontend, e.g. https://crm-xxxx.vercel.app
+      # Where the CRM screens are served from (the static site below), plus
+      # the local dev server so the live API can be used while developing.
       - key: CORS_ORIGINS
-        sync: false
+        value: https://sapphire-crm.onrender.com,http://localhost:5173
 
       # Online shop
       - key: WC_URL
@@ -63,3 +64,43 @@ services:
 
       - key: SENDGRID_API_KEY
         sync: false
+
+  # The CRM's screens: a static site built from frontend/. Free, never sleeps.
+  - type: web
+    name: sapphire-crm
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    # The app uses BrowserRouter: every path must get index.html so that
+    # /orders works on refresh or from a shared link. Real files (/assets/*,
+    # /orders/*.jpg) are served before rewrites apply.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      # All three are public by design: they end up in the browser's
+      # JavaScript. The publishable key cannot read any table (RLS is on
+      # everywhere and nothing is granted to the API roles); the backend's
+      # staff check is what protects the data.
+      - key: VITE_API_BASE_URL
+        value: https://sapphire-crm-api.onrender.com
+      - key: VITE_SUPABASE_URL
+        value: https://ydeuexxfyqytrjmgtlgm.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        value: sb_publishable_qGRpU30k2nArbtiNFGJNUA_8EdVMi0V
