@@ -44,6 +44,7 @@ from models.email import Email
 from models.lead import Lead
 from models.users import User
 from models.organisations import Organisation
+from models.integration_state import IntegrationState
 from database.database import Base
 target_metadata = Base.metadata
 
