@@ -14,8 +14,7 @@ services:
     name: sapphire-crm-api
     runtime: python
     plan: free
-    region: frankfurt # closest Render region to the London database (~15 ms)
-    branch: main
+    region: frankfurt # closest Render region to the database in Ireland (eu-west-1)
     buildCommand: pip install -r requirements.txt
     # Migrations run on every start, so a deploy that adds a table cannot
     # start serving before the table exists. Alembic skips what is applied.
