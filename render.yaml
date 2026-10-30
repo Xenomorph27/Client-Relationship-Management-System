@@ -1,0 +1,63 @@
+# Render Blueprint for the CRM backend.
+#
+# Render > New > Blueprint > pick this repository. Render reads this file,
+# creates the service, and asks for every value marked `sync: false` - those
+# are secrets, so they are typed into Render, never committed here.
+#
+# Free plan: sleeps after 15 minutes without traffic. Keep it awake with a free
+# uptime monitor pinging /health every 10 minutes (UptimeRobot, cron-job.org).
+# The catch-up sync re-reads the shop's last three days of orders on every run,
+# so an order that arrives during a wake-up is still picked up. Upgrading to the
+# Starter plan later is a one-click change in Render; nothing here changes.
+services:
+  - type: web
+    name: sapphire-crm-api
+    runtime: python
+    plan: free
+    region: frankfurt # closest Render region to the London database (~15 ms)
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    # Migrations run on every start, so a deploy that adds a table cannot
+    # start serving before the table exists. Alembic skips what is applied.
+    startCommand: cd backend/app && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+
+      # Supabase > Connect > Session pooler (port 5432). NOT the direct
+      # connection: that is IPv6-only and Render cannot reach it. NOT the
+      # transaction pooler (6543): the shop sync holds a lock across commits,
+      # which needs a real session.
+      - key: DATABASE_URL
+        sync: false
+
+      # Staff login
+      - key: AUTH_REQUIRED
+        value: "true"
+      - key: SUPABASE_URL # https://<project>.supabase.co
+        sync: false
+      - key: STAFF_EMAILS # comma separated; at least your own email
+        sync: false
+
+      # The deployed CRM frontend, e.g. https://crm-xxxx.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Online shop
+      - key: WC_URL
+        value: https://sapphirewoodcrafts.co.uk
+      - key: WC_CONSUMER_KEY
+        sync: false
+      - key: WC_CONSUMER_SECRET
+        sync: false
+      - key: WC_WEBHOOK_SECRET
+        sync: false
+      - key: WC_SYNC_INTERVAL_MINUTES
+        value: "15"
+      - key: WEBSITE_ENQUIRY_SECRET
+        sync: false
+
+      - key: SENDGRID_API_KEY
+        sync: false

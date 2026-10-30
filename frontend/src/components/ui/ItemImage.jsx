@@ -55,7 +55,9 @@ export function ItemImage({ file, name, size = 36, rounded = 'rounded-control', 
 
   return (
     <img
-      src={'/orders/' + file}
+      // Rows from the online shop carry the shop's full photo address; rows
+      // entered here carry a filename in public/orders/.
+      src={/^https?:\/\//.test(file) ? file : '/orders/' + file}
       alt={name ?? ''}
       loading="lazy"
       onError={() => setFailed(true)}

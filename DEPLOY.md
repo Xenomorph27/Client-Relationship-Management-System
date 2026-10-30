@@ -1,0 +1,113 @@
+# Going live: CRM + online shop
+
+How the pieces connect, and the one-time setup to put them online. Do the
+steps in order; each one needs something from the step before.
+
+```
+ sapphirewoodcrafts.co.uk          Render (Frankfurt)              Supabase (London)
+ WordPress + WooCommerce  ──────▶  CRM backend (FastAPI)  ──────▶  Postgres database
+   • orders, customers,   webhooks   • /integrations/...             • CRM tables
+     products             + catch-up • staff-only CRM API            • staff logins (Auth)
+   • enquiry form plugin  ─────────▶                    ◀──────  CRM frontend (Vercel)
+                                                         staff sign in with Supabase Auth
+```
+
+## Secrets: where each one lives
+
+Never commit any of these. Each is typed once, into the place listed.
+
+| Secret | Created in | Pasted into |
+|---|---|---|
+| Database password / connection string | Supabase (new project) | Render `DATABASE_URL` |
+| WooCommerce REST key + secret | WooCommerce › Settings › Advanced › REST API | Render `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET` |
+| Webhook secret | WooCommerce › Settings › Advanced › Webhooks (same on every webhook) | Render `WC_WEBHOOK_SECRET` |
+| Enquiry secret | Any password generator, 40+ characters | Render `WEBSITE_ENQUIRY_SECRET` **and** WordPress › Settings › Sapphire CRM |
+| Supabase publishable (anon) key | Supabase › Project Settings › API | Vercel `VITE_SUPABASE_ANON_KEY` (safe in the browser) |
+
+## 1. Database: Supabase (London)
+
+1. Create the project: region **West EU (London)**. Save the generated password.
+2. **Authentication › Sign In / Providers**: turn **off** "Allow new users to sign up".
+   Staff are invited, never self-registered.
+3. **Authentication › URL Configuration**: Site URL = the Vercel address of the
+   CRM frontend (step 3). Add it to Redirect URLs too.
+4. **Connect › Session pooler**: copy the connection string (port 5432) and put
+   the password in it. This is `DATABASE_URL`.
+5. Tables are created automatically on the first backend start
+   (`alembic upgrade head` runs before the server starts).
+
+## 2. Backend: Render
+
+1. Render › New › **Blueprint** › this repository. `render.yaml` defines the service.
+2. Fill in the `sync: false` values when asked (see the table above).
+   `STAFF_EMAILS` = your own email, so you can sign in before anyone is on the People screen.
+   `SUPABASE_URL` = `https://<project-ref>.supabase.co`.
+   `CORS_ORIGINS` = the Vercel address from step 3 (add it after step 3, then redeploy).
+3. Check `https://<service>.onrender.com/health` returns `{"status":"ok"}`.
+4. Free plan only: add an uptime monitor (UptimeRobot or cron-job.org) that
+   requests `/health` every 10 minutes, so the service does not fall asleep.
+
+## 3. CRM frontend: Vercel
+
+Project root `frontend/`. Environment variables:
+
+```
+VITE_API_BASE_URL=https://<service>.onrender.com
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<publishable key>
+```
+
+Leave all three unset on a deployment that should show sample data only.
+
+## 4. Staff accounts
+
+Supabase › Authentication › Users › **Invite user** with the person's email.
+They click the link, choose a password, and are in, provided their email is
+in `STAFF_EMAILS` or on the CRM's People screen. A valid login that is on
+neither list gets "No access yet", by design.
+
+## 5. Shop → CRM
+
+**Webhooks** (WooCommerce › Settings › Advanced › Webhooks › Add), one per topic:
+`Order created`, `Order updated`, `Customer created`, `Customer updated`,
+`Product created`, `Product updated`. For each:
+
+- Status: Active
+- Delivery URL: `https://<service>.onrender.com/integrations/woocommerce/webhook`
+- Secret: the same value on all of them = `WC_WEBHOOK_SECRET`
+- API version: WP REST API Integration v3
+
+**REST key** (WooCommerce › Settings › Advanced › REST API › Add key), Read
+permission, for the catch-up sync. The sync runs on start-up and every 15
+minutes, and re-reads the last three days of orders, so a webhook missed
+while the server was asleep or redeploying is repaired automatically.
+
+**Enquiry form**: install `integrations/wordpress/sapphire-crm-bridge` (zip
+the folder; Plugins › Add New › Upload), then Settings › Sapphire CRM: the
+backend address and the enquiry secret. Put `[sapphire_enquiry_form]` on the
+Contact page and `[sapphire_enquiry_form kind="commission"]` on Commissions.
+
+## What happens to a shop order
+
+| Shop status | In the CRM |
+|---|---|
+| Pending payment | Nothing yet |
+| On hold (awaiting transfer) | Taken in, deposit 0 |
+| Processing / Completed | Taken in and marked paid; one CRM order **per piece** (`WEB-<order>-<n>`), each through the stock rule |
+| Completed (later) | Pieces still "processing" move to "dispatched" |
+| Cancelled / Refunded / Failed | Each piece reversed as a refund return; stock goes back |
+
+The CRM owns stock levels (the workshop also sells at markets). Product
+changes in the shop update name, price, category and photo; quantity is only
+copied when the CRM first sees a product.
+
+## Checks
+
+```
+cd backend/app
+TEST_DATABASE_URL=postgresql://... python -m pytest ../tests -q   # wipes that database
+```
+
+Status of the shop link, for a signed-in staff member:
+`GET /integrations/woocommerce/status`. Run the catch-up now:
+`POST /integrations/woocommerce/resync`.
