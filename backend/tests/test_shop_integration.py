@@ -119,7 +119,13 @@ def shop_order(number=1057, status="processing", paid=True):
         "status": status,
         "date_paid_gmt": "2026-10-30T12:00:00" if paid else None,
         "customer_note": "Gift wrap please",
-        "billing": {"first_name": "Ada", "last_name": "Lovelace", "email": "Ada@Example.com", "phone": "07700 900123"},
+        "billing": {"first_name": "Ada", "last_name": "Lovelace", "email": "Ada@Example.com", "phone": "07700 900123",
+                    "address_1": "1 Billing Street", "city": "London", "postcode": "N1 1AA", "country": "GB"},
+        "shipping": {"first_name": "Ada", "last_name": "Lovelace", "address_1": "12 Workshop Lane", "address_2": "Tilehurst",
+                     "city": "Reading", "state": "Berkshire", "postcode": "RG31 5AA", "country": "GB"},
+        "shipping_lines": [{"method_title": "UK Standard Delivery"}],
+        "shipping_total": "4.95", "shipping_tax": "0.00", "total": "117.95", "currency": "GBP",
+        "payment_method_title": "Card", "date_created_gmt": "2026-10-30T11:58:00",
         "line_items": [
             {"product_id": 60, "sku": "SW-DIPPER", "name": "Hand-Turned Honey Dipper", "quantity": 2,
              "total": "18.00", "total_tax": "0.00", "image": {"src": "https://shop/dipper.webp"}},
@@ -269,6 +275,7 @@ def test_refund_reverses_each_piece_once_and_restocks(client):
     returns = db.query(Order).filter(Order.kind == "return").all()
     assert len(returns) == 3
     assert all(r.return_type.value == "refund" for r in returns)
+    assert len({r.web_order_id for r in returns}) == 1 and returns[0].web_order_id is not None
     assert db.query(InventoryItem).filter_by(sku="SW-DIPPER").one().quantity == 5
     db.close()
 
@@ -357,3 +364,78 @@ def test_catch_up_applies_missed_orders_idempotently(monkeypatch):
 def test_resync_endpoint_is_staff_only(client):
     assert client.post("/integrations/woocommerce/resync").status_code == 401
     assert client.post("/integrations/woocommerce/resync", headers=bearer()).json()["ok"] is False  # keys not set
+
+
+# ---------------------------------------------------------------------------
+# Shop orders (web_orders) and security
+# ---------------------------------------------------------------------------
+
+
+def test_shop_order_row_holds_address_and_links_every_piece(client):
+    add_item("SW-DIPPER", "Hand-Turned Honey Dipper", qty=5)
+    add_item("SW-WALNUT-BOWL", "Walnut Salad Bowl", qty=5)
+    raw, headers = signed(shop_order(), topic="order.created")
+    client.post("/integrations/woocommerce/webhook", content=raw, headers=headers)
+
+    rows = web_rows()
+    assert len({o.web_order_id for o in rows}) == 1 and rows[0].web_order_id is not None
+
+    web = client.get(f"/web-orders/{rows[0].web_order_id}", headers=bearer()).json()
+    assert web["number"] == "1057" and web["status"] == "processing"
+    assert web["address_lines"] == ["Ada Lovelace", "12 Workshop Lane", "Tilehurst", "Reading RG31 5AA", "Berkshire"]
+    assert web["shipping_method"] == "UK Standard Delivery" and web["payment_method"] == "Card"
+    assert web["total"] == "117.95" and web["customer_note"] == "Gift wrap please"
+    assert [p["order_ref"] for p in web["pieces"]] == ["WEB-1057-1", "WEB-1057-2", "WEB-1057-3"]
+    assert web["customer_id"] == rows[0].customer_id
+
+    listed = client.get("/web-orders/?status=processing", headers=bearer()).json()
+    assert [w["number"] for w in listed] == ["1057"]
+
+
+def test_shop_order_row_follows_status_and_falls_back_to_billing_address(client):
+    add_item("SW-DIPPER", "Hand-Turned Honey Dipper", qty=5)
+    add_item("SW-WALNUT-BOWL", "Walnut Salad Bowl", qty=5)
+    order = shop_order()
+    order["shipping"] = {}
+    raw, headers = signed(order, topic="order.created")
+    client.post("/integrations/woocommerce/webhook", content=raw, headers=headers)
+    order["status"] = "completed"
+    order["date_completed_gmt"] = "2026-11-02T09:00:00"
+    raw, headers = signed(order, topic="order.updated")
+    client.post("/integrations/woocommerce/webhook", content=raw, headers=headers)
+
+    web = client.get("/web-orders/", headers=bearer()).json()[0]
+    assert web["status"] == "completed" and web["completed_at"].startswith("2026-11-02")
+    assert web["address_lines"][1:] == ["1 Billing Street", "London N1 1AA"]
+
+
+def test_pieces_from_before_web_orders_get_linked_on_next_sync(client):
+    add_item("SW-DIPPER", "Hand-Turned Honey Dipper", qty=5)
+    add_item("SW-WALNUT-BOWL", "Walnut Salad Bowl", qty=5)
+    raw, headers = signed(shop_order(), topic="order.created")
+    client.post("/integrations/woocommerce/webhook", content=raw, headers=headers)
+    db = SessionLocal()
+    db.query(Order).update({Order.web_order_id: None})
+    db.commit()
+    db.close()
+    raw, headers = signed(shop_order(), topic="order.updated")
+    client.post("/integrations/woocommerce/webhook", content=raw, headers=headers)
+    assert all(o.web_order_id is not None for o in web_rows())
+
+
+def test_web_orders_are_staff_only(client):
+    assert client.get("/web-orders/").status_code == 401
+    assert client.get("/web-orders/1", headers=bearer(email="stranger@gmail.com")).status_code == 403
+    assert client.get("/web-orders/999", headers=bearer()).status_code == 404
+
+
+def test_every_table_has_row_level_security():
+    """Supabase publishes every public table through its REST API with the key
+    that sits in the frontend. A table without RLS would be readable by anyone,
+    so a migration that adds a table must also switch RLS on for it."""
+    with engine.connect() as conn:
+        exposed = conn.execute(text(
+            "select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+            "where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity"
+        )).scalars().all()
+    assert exposed == []

@@ -20,6 +20,7 @@ from routers import (
     returns,
     tasks,
     users,
+    web_orders,
 )
 from settings import settings
 
@@ -82,6 +83,7 @@ app.include_router(carts.router, dependencies=STAFF_ONLY)
 app.include_router(tasks.router, dependencies=STAFF_ONLY)
 app.include_router(emails.router, dependencies=STAFF_ONLY)
 app.include_router(campaigns.router, dependencies=STAFF_ONLY)
+app.include_router(web_orders.router, dependencies=STAFF_ONLY)
 app.include_router(integrations.router)
 
 

@@ -20,6 +20,7 @@ import {
   sourceMeta,
 } from '../lib/domain.js'
 import { formatAmount, formatCompact, formatDate } from '../lib/format.js'
+import { ShopOrderDetails } from '../components/data/ShopOrderDetails.jsx'
 
 /**
  * The fulfilment board.
@@ -225,6 +226,7 @@ export default function Logistics() {
                 {formatDate(selected.delivery_due)}
               </DetailRow>
             </DetailList>
+            <ShopOrderDetails webOrderId={selected.web_order_id ?? null} />
           </>
         )}
       </Drawer>
