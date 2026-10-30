@@ -46,8 +46,10 @@ services:
         value: https://sapphire-crm.onrender.com,http://localhost:5173
 
       # Online shop
+      # The shop is still in /pocdesign. Change to the bare domain when the
+      # site moves to the root (DEPLOY.md, "Domain move").
       - key: WC_URL
-        value: https://sapphirewoodcrafts.co.uk
+        value: https://sapphirewoodcrafts.co.uk/pocdesign
       - key: WC_CONSUMER_KEY
         sync: false
       - key: WC_CONSUMER_SECRET

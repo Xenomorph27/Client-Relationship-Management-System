@@ -71,24 +71,31 @@ neither list gets "No access yet", by design.
 
 ## 5. Shop → CRM
 
-**Webhooks** (WooCommerce › Settings › Advanced › Webhooks › Add), one per topic:
-`Order created`, `Order updated`, `Customer created`, `Customer updated`,
-`Product created`, `Product updated`. For each:
+**Plugin** (does the webhooks for you): install `sapphire-crm-bridge.zip`
+(Plugins › Add New › Upload; on the multisite, from Network Admin, then
+activate on the shop site). Then Settings › Sapphire CRM:
 
-- Status: Active
-- Delivery URL: `https://<service>.onrender.com/integrations/woocommerce/webhook`
-- Secret: the same value on all of them = `WC_WEBHOOK_SECRET`
-- API version: WP REST API Integration v3
+- CRM address: `https://sapphire-crm-api.onrender.com`
+- Enquiry secret: Render › sapphire-crm-api › Environment › `WEBSITE_ENQUIRY_SECRET`
+- Shop webhook secret: same place, `WC_WEBHOOK_SECRET`
+
+Saving creates one active webhook per topic (order, customer and product;
+created and updated), all signed with that secret and pointing at
+`/integrations/woocommerce/webhook`. Every hour the plugin switches back on
+any of them that WooCommerce disabled after five failed deliveries.
 
 **REST key** (WooCommerce › Settings › Advanced › REST API › Add key), Read
-permission, for the catch-up sync. The sync runs on start-up and every 15
-minutes, and re-reads the last three days of orders, so a webhook missed
-while the server was asleep or redeploying is repaired automatically.
+permission, for the catch-up sync. Paste the key and secret into Render
+`WC_CONSUMER_KEY` / `WC_CONSUMER_SECRET`. The sync runs on start-up and every
+15 minutes and re-reads the last three days of orders, so anything a webhook
+missed (server asleep, redeploying, webhook disabled) is repaired.
 
-**Enquiry form**: install `integrations/wordpress/sapphire-crm-bridge` (zip
-the folder; Plugins › Add New › Upload), then Settings › Sapphire CRM: the
-backend address and the enquiry secret. Put `[sapphire_enquiry_form]` on the
-Contact page and `[sapphire_enquiry_form kind="commission"]` on Commissions.
+**Enquiry forms**: `[sapphire_enquiry_form]` on Contact,
+`[sapphire_enquiry_form kind="commission"]` on Commissions.
+
+**Domain move**: when the shop moves from `/pocdesign` to the bare domain,
+change `WC_URL` in `render.yaml`, and the plugin's webhooks keep working
+(they live in the shop's database and move with it).
 
 ## What happens to a shop order
 
