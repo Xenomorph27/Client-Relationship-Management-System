@@ -26,7 +26,10 @@ Never commit any of these. Each is typed once, into the place listed.
 
 ## 1. Database: Supabase (London)
 
-1. Create the project: region **West EU (London)**. Save the generated password.
+1. Create the project in a European region. Save the generated password.
+   Untick "Automatically expose new tables"; tick "Enable automatic RLS".
+   (Live project: `sapphire-woodcrafts`, ref `ydeuexxfyqytrjmgtlgm`, eu-west-1,
+   created 31 Oct 2026; all tables loaded at revision `a4d2f6c8e1b7`.)
 2. **Authentication › Sign In / Providers**: turn **off** "Allow new users to sign up".
    Staff are invited, never self-registered.
 3. **Authentication › URL Configuration**: Site URL = the Vercel address of the
@@ -34,7 +37,10 @@ Never commit any of these. Each is typed once, into the place listed.
 4. **Connect › Session pooler**: copy the connection string (port 5432) and put
    the password in it. This is `DATABASE_URL`.
 5. Tables are created automatically on the first backend start
-   (`alembic upgrade head` runs before the server starts).
+   (`alembic upgrade head` runs before the server starts). On a database that
+   is already at the latest revision this does nothing. To load them by hand
+   instead: `cd backend/app && alembic upgrade head --sql > schema.sql`, then
+   run that file in Supabase's SQL editor.
 
 ## 2. Backend: Render
 
