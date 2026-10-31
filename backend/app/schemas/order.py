@@ -24,6 +24,7 @@ class OrderBase(BaseModel):
     inventory_id: Optional[int] = None
     customer_id: Optional[int] = None
     owner_id: Optional[int] = None
+    web_order_id: Optional[int] = None
 
 
 class OrderCreate(OrderBase):

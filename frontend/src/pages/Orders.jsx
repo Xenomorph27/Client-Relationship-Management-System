@@ -25,6 +25,7 @@ import {
   stockMeta,
 } from '../lib/domain.js'
 import { formatAmount, formatAmountExact, formatDate, relativeTime } from '../lib/format.js'
+import { ShopOrderDetails } from '../components/data/ShopOrderDetails.jsx'
 
 const BLANK = {
   name: '',
@@ -376,6 +377,7 @@ export default function Orders() {
                 {selected.delivered_at ? formatDate(selected.delivered_at) : null}
               </DetailRow>
             </DetailList>
+            <ShopOrderDetails webOrderId={selected.web_order_id ?? null} />
           </>
         )}
       </Drawer>

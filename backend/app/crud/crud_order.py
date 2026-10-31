@@ -238,6 +238,9 @@ def record_return(db: Session, payload: ReturnCreate) -> dict:
         return_type=return_type,
         remarks=data.get("remarks"),
         returns_order_id=payload.returns_order_id,
+        # A return of a shop order points at the same shop order, so the
+        # Logistics drawer shows the address to collect from.
+        web_order_id=original.web_order_id if original is not None else None,
         order_ref=next_order_ref(db),
     )
     db.add(order)

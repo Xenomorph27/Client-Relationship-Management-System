@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
 import { accentFor } from '../../lib/screens.js'
+import { useAuth } from '../auth/AuthGate.jsx'
 import {
   Building2,
   ChartNoAxesColumn,
   ChevronsLeft,
   ChevronsRight,
   GaugeCircle,
+  LogOut,
   Boxes,
   ChartPie,
   Package,
@@ -74,6 +76,7 @@ const GROUPS = [
 ]
 
 export function Sidebar({ collapsed, onToggle }) {
+  const { email, signOut } = useAuth()
   return (
     <nav
       aria-label="Main"
@@ -154,6 +157,26 @@ export function Sidebar({ collapsed, onToggle }) {
       </div>
 
       <div className="border-t border-rule p-1.5">
+        {signOut && (
+          <button
+            type="button"
+            onClick={signOut}
+            title={collapsed ? 'Sign out ' + email : undefined}
+            className="mb-0.5 flex h-7 w-full items-center gap-2 rounded-control px-1.5 text-ink-3 hover:bg-raised hover:text-ink"
+          >
+            <LogOut size={15} className="shrink-0" />
+            {!collapsed && (
+              <span className="min-w-0 text-left text-xs">
+                <span className="block">Sign out</span>
+              </span>
+            )}
+          </button>
+        )}
+        {signOut && !collapsed && (
+          <div className="truncate px-1.5 pb-1 text-2xs text-ink-3" title={email}>
+            {email}
+          </div>
+        )}
         <button
           type="button"
           onClick={onToggle}
