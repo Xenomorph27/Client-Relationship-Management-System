@@ -22,6 +22,7 @@
  */
 
 import { nextId, serverFieldsFor, tables } from '../mocks/db.js'
+import { accessToken, supabase } from '../lib/supabase.js'
 
 const LATENCY_MS = 180
 
@@ -72,11 +73,19 @@ export async function http(path, { method = 'GET', body, query } = {}) {
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
   }
 
+  // Every call carries the signed-in staff member's token. The backend
+  // refuses anything without one, so this is what makes the data reachable at
+  // all - not a nicety.
+  const headers = {}
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const token = await accessToken()
+  if (token) headers.Authorization = 'Bearer ' + token
+
   let response
   try {
     response = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (cause) {
@@ -89,6 +98,13 @@ export async function http(path, { method = 'GET', body, query } = {}) {
       `Cannot reach the API at ${API_BASE}. Is the backend running, and is this origin allowed by CORS?`,
       { cause },
     )
+  }
+
+  // A 401 means the session is gone (expired, revoked, or signed out in
+  // another tab). Signing out here sends the user back to the login screen
+  // instead of leaving every table showing the same error.
+  if (response.status === 401 && supabase) {
+    await supabase.auth.signOut()
   }
 
   if (response.status === 204) return { ok: true }

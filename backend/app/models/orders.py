@@ -94,6 +94,11 @@ class Order(Base):
     owner_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # The shop order this piece came from (address, payment, receipt number).
+    # NULL for orders entered in the CRM directly.
+    web_order_id = Column(
+        Integer, ForeignKey("web_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # Returns only; NULL on a delivery.
     return_type = Column(pg_enum(Return_Type, "return_type"), nullable=True)
@@ -112,6 +117,7 @@ class Order(Base):
     customer = relationship("Customer", back_populates="orders")
     owner = relationship("User", back_populates="orders")
     tasks = relationship("Task", back_populates="order")
+    web_order = relationship("WebOrder", back_populates="pieces")
     # remote_side pins which end of the self-join is the parent, otherwise
     # SQLAlchemy cannot tell the direction and refuses to map it.
     original_order = relationship(

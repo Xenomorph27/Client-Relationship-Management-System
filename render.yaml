@@ -1,0 +1,108 @@
+# Render Blueprint for the CRM backend.
+#
+# Render > New > Blueprint > pick this repository. Render reads this file,
+# creates the service, and asks for every value marked `sync: false` - those
+# are secrets, so they are typed into Render, never committed here.
+#
+# Free plan: sleeps after 15 minutes without traffic. Keep it awake with a free
+# uptime monitor pinging /health every 10 minutes (UptimeRobot, cron-job.org).
+# The catch-up sync re-reads the shop's last three days of orders on every run,
+# so an order that arrives during a wake-up is still picked up. Upgrading to the
+# Starter plan later is a one-click change in Render; nothing here changes.
+services:
+  - type: web
+    name: sapphire-crm-api
+    runtime: python
+    plan: free
+    region: frankfurt # closest Render region to the database in Ireland (eu-west-1)
+    buildCommand: pip install -r requirements.txt
+    # Migrations run on every start, so a deploy that adds a table cannot
+    # start serving before the table exists. Alembic skips what is applied.
+    startCommand: cd backend/app && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+
+      # Supabase > Connect > Session pooler (port 5432). NOT the direct
+      # connection: that is IPv6-only and Render cannot reach it. NOT the
+      # transaction pooler (6543): the shop sync holds a lock across commits,
+      # which needs a real session.
+      - key: DATABASE_URL
+        sync: false
+
+      # Staff login
+      - key: AUTH_REQUIRED
+        value: "true"
+      - key: SUPABASE_URL # https://<project>.supabase.co
+        sync: false
+      - key: STAFF_EMAILS # comma separated; at least your own email
+        sync: false
+
+      # Where the CRM screens are served from (the static site below), plus
+      # the local dev server so the live API can be used while developing.
+      - key: CORS_ORIGINS
+        value: https://sapphire-crm.onrender.com,http://localhost:5173
+
+      # Online shop
+      # The shop is still in /pocdesign. Change to the bare domain when the
+      # site moves to the root (DEPLOY.md, "Domain move").
+      - key: WC_URL
+        value: https://sapphirewoodcrafts.co.uk/pocdesign
+      - key: WC_CONSUMER_KEY
+        sync: false
+      - key: WC_CONSUMER_SECRET
+        sync: false
+      # Render generates these two. Copy each from Render > Environment into
+      # WooCommerce (every webhook's Secret) and WordPress > Settings >
+      # Sapphire CRM respectively.
+      - key: WC_WEBHOOK_SECRET
+        generateValue: true
+      - key: WC_SYNC_INTERVAL_MINUTES
+        value: "15"
+      - key: WEBSITE_ENQUIRY_SECRET
+        generateValue: true
+
+      - key: SENDGRID_API_KEY
+        sync: false
+
+  # The CRM's screens: a static site built from frontend/. Free, never sleeps.
+  - type: web
+    name: sapphire-crm
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    # The app uses BrowserRouter: every path must get index.html so that
+    # /orders works on refresh or from a shared link. Real files (/assets/*,
+    # /orders/*.jpg) are served before rewrites apply.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      # All three are public by design: they end up in the browser's
+      # JavaScript. The publishable key cannot read any table (RLS is on
+      # everywhere and nothing is granted to the API roles); the backend's
+      # staff check is what protects the data.
+      - key: VITE_API_BASE_URL
+        value: https://sapphire-crm-api.onrender.com
+      - key: VITE_SUPABASE_URL
+        value: https://ydeuexxfyqytrjmgtlgm.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        value: sb_publishable_qGRpU30k2nArbtiNFGJNUA_8EdVMi0V
